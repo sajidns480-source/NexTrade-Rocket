@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NexTrade Rocket | Sajid Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        :root { --primary: #6366F1; --bg: #0B0E14; --profit: #22C55E; --loss: #EF4444; }
+        body { font-family: 'Fredoka', sans-serif; background-color: var(--bg); color: white; overflow: hidden; touch-action: manipulation; }
+        .page { display: none; height: 100vh; overflow-y: auto; padding-bottom: 90px; }
+        .active-page { display: block; animation: zoomIn 0.3s ease-out; }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .game-zone { height: 42vh; background: radial-gradient(circle at center, #1e1b4b 0%, #020617 100%); position: relative; overflow: hidden; }
+        .rocket { font-size: 55px; position: absolute; left: 50%; transform: translateX(-50%); transition: bottom 0.8s ease-in-out; z-index: 10; bottom: 45%; filter: drop-shadow(0 0 15px rgba(99, 102, 241, 0.6)); }
+        #chartCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; pointer-events: none; }
+        #entry-line { position: absolute; left: 0; right: 0; border-top: 2px dashed #fbbf24; display: none; z-index: 6; pointer-events: none; }
+        .bottom-nav { background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(15px); border-top: 1px solid rgba(255,255,255,0.08); height: 75px !important; }
+        .card { background: rgba(255,255,255,0.05); border: 2px solid rgba(255,255,255,0.08); border-radius: 24px; }
+        .btn-up { background: var(--profit); box-shadow: 0 4px 0 #166534; color: black; }
+        .btn-down { background: var(--loss); box-shadow: 0 4px 0 #991b1b; color: white; }
+        ::-webkit-scrollbar { width: 0; background: transparent; }
+        
+        input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        #stake-input { background: transparent; border: none; outline: none; text-align: center; color: white; width: 60px; font-weight: bold; }
+        
+        .locked-input { opacity: 0.5; pointer-events: none; }
+        
+        /* Auth Screen Styling */
+        #auth-screen { background: radial-gradient(circle at top, #1e1b4b 0%, #0b0e14 100%); z-index: 999; }
+    </style>
+</head>
+<body>
+
+    <div id="auth-screen" class="fixed inset-0 flex flex-col items-center justify-center p-6 z-[9999]">
+        <div class="w-full max-w-sm text-center space-y-6">
+            <div class="space-y-2">
+                <span class="text-6xl inline-block animate-bounce">🚀</span>
+                <h1 class="text-3xl font-bold tracking-tighter uppercase italic text-indigo-400">NexTrade</h1>
+                <p class="text-gray-400 text-xs tracking-wide">• Secure Trading Platform</p>
+            </div>
+
+            <div class="card p-6 bg-slate-900/40 border-white/5 space-y-4 shadow-2xl backdrop-blur-md">
+                <h2 id="auth-title" class="text-xl font-bold text-left text-white/90">লগইন করুন</h2>
+                
+                <div class="space-y-3 text-left">
+                    <div>
+                        <label class="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block mb-1">ইমেইল ঠিকানা</label>
+                        <input id="auth-email" type="email" placeholder="example@mail.com" class="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-indigo-500 text-white">
+                    </div>
+                    <div>
+                        <label class="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block mb-1">পাসওয়ার্ড</label>
+                        <input id="auth-password" type="password" placeholder="••••••••" class="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-indigo-500 text-white">
+                    </div>
+                    <div id="confirm-password-container" class="hidden">
+                        <label class="text-[10px] text-indigo-300 font-bold uppercase tracking-wider block mb-1">কনফার্ম পাসওয়ার্ড</label>
+                        <input id="auth-confirm-password" type="password" placeholder="••••••••" class="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm w-full outline-none focus:border-indigo-500 text-white">
+                    </div>
+                </div>
+
+                <button id="auth-submit-btn" onclick="handleAuthSubmit()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-xl shadow-lg transition duration-200 active:scale-95 text-sm">লগইন</button>
+                
+                <div class="text-center pt-2">
+                    <p id="auth-toggle-text" class="text-xs text-gray-400">অ্যাকাউন্ট নেই? <span onclick="toggleAuthMode()" class="text-indigo-400 font-bold cursor-pointer hover:underline">নতুন অ্যাকাউন্ট খুলুন</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="flex justify-between items-center px-6 py-4 bg-[#020617] border-b-2 border-white/5 relative z-[500]">
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <button onclick="toggleTopMenu()" class="text-xl bg-white/5 hover:bg-white/10 p-2 rounded-xl border border-white/10 active:scale-90 transition">
+                    ☰
+                </button>
+                <div id="top-dropdown-menu" class="hidden absolute left-0 mt-2 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl py-2 z-[600]">
+                    <button onclick="logoutGame(); toggleTopMenu();" class="w-full text-left px-4 py-3 text-red-400 hover:bg-white/5 font-bold flex items-center gap-2 text-sm">
+                        <span>🚪</span> লগ আউট (Logout)
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-2xl">🚀</span>
+                <span class="font-bold text-xl tracking-tighter uppercase italic text-indigo-400">NexTrade</span>
+            </div>
+        </div>
+        <div class="flex flex-col items-end cursor-pointer" onclick="toggleBalanceType()">
+            <span id="account-type-label" class="text-[9px] bg-yellow-500/20 text-yellow-400 px-2 rounded-full font-bold uppercase tracking-widest mb-1">Demo Account</span>
+            <span id="balance-txt" class="text-xl font-bold text-yellow-400">৳১০,০০০.০০</span>
+        </div>
+    </nav>
+
+    <section id="page-trade" class="page active-page">
+        <div class="game-zone" id="game-zone">
+            <canvas id="chartCanvas"></canvas>
+            <div id="entry-line"></div>
+            <div id="rocket" class="rocket">🚀</div>
+            <button onclick="showTradeHistory()" class="absolute top-4 right-4 bg-white/10 p-2 rounded-xl border border-white/20 z-30 active:scale-90">
+                <span class="text-lg">📜</span>
+            </button>
+            <div class="absolute bottom-4 left-4 bg-black/60 px-3 py-1 rounded-xl border border-white/10 z-20">
+                <p id="live-price" class="text-lg font-bold text-green-400">Loading...</p>
+            </div>
+            <div id="countdown-layer" class="absolute inset-0 flex flex-col items-center justify-center hidden z-40 bg-black/20">
+                <p id="timer" class="text-8xl font-bold text-white drop-shadow-2xl">00</p>
+                <p class="text-yellow-400 text-xs uppercase tracking-widest mt-2 font-bold">ট্রেড চলছে...</p>
+            </div>
+        </div>
+
+        <div class="p-6 space-y-5">
+            <div class="grid grid-cols-2 gap-4">
+                <div class="card p-3 text-center" id="stake-container">
+                    <p class="text-[10px] text-gray-400 font-bold mb-1 uppercase">টাকার পরিমাণ</p>
+                    <div class="flex justify-center items-center gap-3">
+                        <button id="minus-btn" onclick="changeAmt(-10)" class="w-8 h-8 bg-white/10 rounded-full font-bold active:scale-90">-</button>
+                        <div class="flex items-center text-xl font-bold">
+                            <span>৳</span>
+                            <input type="number" id="stake-input" value="100" oninput="validateInput(this)">
+                        </div>
+                        <button id="plus-btn" onclick="changeAmt(10)" class="w-8 h-8 bg-white/10 rounded-full font-bold active:scale-90">+</button>
+                    </div>
+                </div>
+                <div class="card p-3 text-center">
+                    <p class="text-[10px] text-gray-400 font-bold mb-1 uppercase">সময়</p>
+                    <select id="trade-time" class="bg-transparent font-bold outline-none text-center w-full appearance-none">
+                        <option value="5" class="bg-gray-900">৫ সেকেন্ড</option>
+                        <option value="15" class="bg-gray-900">১৫ সেকেন্ড</option>
+                        <option value="30" class="bg-gray-900">৩০ সেকেন্ড</option>
+                        <option value="60" class="bg-gray-900">১ মিনিট</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-6">
+                <button id="btn-up" onclick="startRocket('UP')" class="btn-up py-4 rounded-[25px] flex flex-col items-center active:translate-y-1 font-bold">
+                    <span class="text-2xl">☝️</span><span class="uppercase text-[10px]">উপরে যাবে</span>
+                </button>
+                <button id="btn-down" onclick="startRocket('DOWN')" class="btn-down py-4 rounded-[25px] flex flex-col items-center active:translate-y-1 font-bold">
+                    <span class="text-2xl">👇</span><span class="uppercase text-[10px]">নিচে যাবে</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+    <section id="page-leaderboard" class="page p-6">
+        <h2 class="text-2xl font-bold mb-4 italic text-indigo-400 text-center">Top Traders</h2>
+        <div class="flex justify-around items-end mb-8 mt-10 bg-indigo-500/5 py-6 rounded-[30px] border border-white/5" id="podium-area"></div>
+        <div id="leader-list" class="space-y-3"></div>
+    </section>
+
+    <section id="page-wallet" class="page p-6">
+        <h2 class="text-2xl font-bold mb-6 italic text-indigo-400 text-center">ওয়ালেট</h2>
+        <div class="card p-6 mb-6 text-center bg-gradient-to-br from-indigo-600/20 to-transparent border-indigo-500/30 shadow-xl">
+            <p class="text-xs text-gray-400 uppercase font-bold tracking-widest">Available Balance</p>
+            <p id="wallet-bal" class="text-5xl font-bold text-yellow-400 my-2">৳০.০০</p>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <button onclick="showWalletModal('deposit')" class="bg-indigo-600 p-4 rounded-2xl font-bold flex flex-col items-center gap-2 active:scale-95 shadow-lg"><span>➕</span> ডিপোজিট</button>
+            <button onclick="showWalletModal('withdraw')" class="card p-4 rounded-2xl font-bold flex flex-col items-center gap-2 text-gray-300 active:scale-95"><span>💸</span> উইথড্র</button>
+        </div>
+        <div class="card p-5 border-indigo-500/20 bg-indigo-500/5">
+            <div class="flex justify-between items-center mb-4">
+                <p class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Refer Code</p>
+                <span class="bg-green-500/20 text-green-400 text-[9px] px-2 py-0.5 rounded-full font-bold uppercase">৳২০ Bonus</span>
+            </div>
+            <div class="flex gap-2">
+                <input id="ref-input" readonly value="SAJID7788" class="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold w-full outline-none text-indigo-200 tracking-widest">
+                <button onclick="copyRef()" class="bg-indigo-600 text-white font-bold px-5 rounded-xl text-xs active:scale-90 shadow-lg">Copy</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="page-profile" class="page p-6">
+        <h2 class="text-2xl font-bold mb-6 italic text-indigo-400 text-center">অ্যাকাউন্ট</h2>
+        <div class="card p-6 mb-4 text-center bg-gradient-to-b from-indigo-600/20 to-transparent border-indigo-500/30">
+            <div class="relative w-24 h-24 mx-auto mb-4">
+                <div class="w-full h-full bg-indigo-500 rounded-full flex items-center justify-center text-4xl shadow-2xl border-4 border-white/10">👤</div>
+            </div>
+            <h3 id="profile-email-txt" class="text-lg font-bold italic text-white truncate px-4">Trader Sajid</h3>
+            <span class="bg-yellow-500/20 text-yellow-400 text-[10px] px-3 py-0.5 rounded-full font-bold border border-yellow-500/30 mt-2 inline-block uppercase">VIP Level 1</span>
+        </div>
+        <div class="space-y-3">
+            <button onclick="showHistory('Deposit')" class="card p-4 w-full flex justify-between items-center bg-white/5 border-white/10 active:scale-95">
+                <div class="flex items-center gap-3"><span>📥</span><span class="text-sm">ডিপোজিট হিস্টোরি</span></div><span class="text-gray-500">❯</span>
+            </button>
+            <button onclick="showHistory('Withdraw')" class="card p-4 w-full flex justify-between items-center bg-white/5 border-white/10 active:scale-95">
+                <div class="flex items-center gap-3"><span>📤</span><span class="text-sm">উইথড্র হিস্টোরি</span></div><span class="text-gray-500">❯</span>
+            </button>
+            <button onclick="contactSupport()" class="card p-4 w-full flex justify-between items-center bg-indigo-500/10 border-indigo-500/30 active:scale-95">
+                <div class="flex items-center gap-3"><span>🎧</span><span class="text-sm text-indigo-300">সাপোর্ট টিম</span></div><span class="text-indigo-500">❯</span>
+            </button>
+        </div>
+        <button onclick="logoutGame()" class="card p-4 w-full flex items-center justify-center gap-3 border-red-500/20 bg-red-500/5 text-red-400 font-bold mt-8 active:scale-95">🚪 লগ আউট</button>
+    </section>
+
+    <div class="bottom-nav fixed bottom-0 left-0 right-0 flex justify-around items-center px-4 z-[100] rounded-t-[30px]">
+        <button onclick="nav('page-trade', this)" class="nav-btn text-indigo-500 flex flex-col items-center">
+            <span class="text-2xl">🎮</span><span class="text-[9px] font-bold uppercase mt-1">ট্রেড</span>
+        </button>
+        <button onclick="nav('page-leaderboard', this); refreshLeaderboard();" class="nav-btn text-gray-500 flex flex-col items-center">
+            <span class="text-2xl">🏆</span><span class="text-[9px] font-bold uppercase mt-1">র‍্যাঙ্ক</span>
+        </button>
+        <button onclick="nav('page-wallet', this)" class="nav-btn text-gray-500 flex flex-col items-center">
+            <span class="text-2xl">💰</span><span class="text-[9px] font-bold uppercase mt-1">ওয়ালেট</span>
+        </button>
+        <button onclick="nav('page-profile', this)" class="nav-btn text-gray-500 flex flex-col items-center">
+            <span class="text-2xl">👤</span><span class="text-[9px] font-bold uppercase mt-1">অ্যাকাউন্ট</span>
+        </button>
+    </div>
+
+    <script>
+        // --- UPDATED FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyA0BLIr4dgqoDJldCb1Pr_GY7hLL-xNT4Q",
+            authDomain: "sajid-aviator.firebaseapp.com",
+            projectId: "sajid-aviator",
+            storageBucket: "sajid-aviator.firebasestorage.app",
+            messagingSenderId: "154894459012",
+            appId: "1:154894459012:web:f705202647f2cef62022d1",
+            measurementId: "G-024WR0GNEP"
+        };
+
+        // Initialize Firebase using Compat SDK structure
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        let adminNumbers = { bKash: "017XXXXXXXX", Nagad: "018XXXXXXXX", Rocket: "019XXXXXXXX" };
+        
+        let currentUser = null;
+        let realBalance = 0.00;
+        let demoBalance = 10000.00;
+        let isBonusTaken = false;
+        let isDemoAccount = true; 
+        let transactions = []; 
+        let stake = 100;
+        let lastBtcPrice = 0;
+        let isFlying = false;
+        let resultControl = "random";
+        let isLoginMode = true;
+
+        // --- TOP MENU TOGGLE FUNCTION ---
+        function toggleTopMenu() {
+            const menu = document.getElementById('top-dropdown-menu');
+            if(menu.classList.contains('hidden')) {
+                menu.classList.remove('hidden');
+            } else {
+                menu.classList.add('hidden');
+            }
+        }
+
+        // Close menu if clicked anywhere else
+        window.addEventListener('click', function(e) {
+            const menu = document.getElementById('top-dropdown-menu');
+            if (!e.target.closest('#top-dropdown-menu') && !e.target.innerText.includes('☰')) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        // --- AUTH LOGIC ---
+        auth.onAuthStateChanged(user => {
+            const authScreen = document.getElementById('auth-screen');
+            if (user) { 
+                currentUser = user;
+                authScreen.classList.add('hidden'); 
+                document.getElementById('profile-email-txt').innerText = user.email || "Trader Sajid";
+                loadUserData(); 
+                listenToAdmin(); 
+            } else { 
+                currentUser = null;
+                authScreen.classList.remove('hidden'); 
+            }
+        });
+
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            const title = document.getElementById('auth-title');
+            const submitBtn = document.getElementById('auth-submit-btn');
+            const toggleText = document.getElementById('auth-toggle-text');
+            const confirmPasswordContainer = document.getElementById('confirm-password-container');
+
+            if (isLoginMode) {
+                title.innerText = "লগইন করুন";
+                submitBtn.innerText = "লগইন";
+                toggleText.innerHTML = `অ্যাকাউন্ট নেই? <span onclick="toggleAuthMode()" class="text-indigo-400 font-bold cursor-pointer hover:underline">নতুন অ্যাকাউন্ট খুলুন</span>`;
+                confirmPasswordContainer.classList.add('hidden');
+            } else {
+                title.innerText = "নতুন অ্যাকাউন্ট তৈরি করুন";
+                submitBtn.innerText = "সাইন আপ";
+                toggleText.innerHTML = `আগে থেকেই অ্যাকাউন্ট আছে? <span onclick="toggleAuthMode()" class="text-indigo-400 font-bold cursor-pointer hover:underline">লগইন করুন</span>`;
+                confirmPasswordContainer.classList.remove('hidden');
+            }
+            // Clear inputs on toggle
+            document.getElementById('auth-password').value = "";
+            document.getElementById('auth-confirm-password').value = "";
+        }
+
+        async function handleAuthSubmit() {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value.trim();
+            const confirmPassword = document.getElementById('auth-confirm-password').value.trim();
+
+            if (!email || !password) {
+                return Swal.fire('ভুল', 'অনুগ্রহ করে ইমেইল এবং পাসওয়ার্ড সঠিক ভাবে লিখুন।', 'warning');
+            }
+            if (password.length < 6) {
+                return Swal.fire('ভুল', 'নিরাপত্তার জন্য পাসওয়ার্ড নূন্যতম ৬ অক্ষরের হতে হবে।', 'warning');
+            }
+            
+            // Sign Up Mode Specific Check: Validate Confirm Password
+            if (!isLoginMode) {
+                if (!confirmPassword) {
+                    return Swal.fire('ভুল', 'অনুগ্রহ করে কনফার্ম পাসওয়ার্ড ফিল্ডটি পূরণ করুন।', 'warning');
+                }
+                if (password !== confirmPassword) {
+                    return Swal.fire('ভুল', 'পাসওয়ার্ড এবং কনফার্ম পাসওয়ার্ড একে অপরের সাথে মেলেনি!', 'error');
+                }
+            }
+
+            Swal.showLoading();
+
+            try {
+                if (isLoginMode) {
+                    await auth.signInWithEmailAndPassword(email, password);
+                    Swal.fire({ title: 'স্বাগতম!', text: 'লগইন সফল হয়েছে।', icon: 'success', timer: 1500, showConfirmButton: false });
+                } else {
+                    // নতুন অ্যাকাউন্ট তৈরি লজিক
+                    const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                    const userId = userCredential.user.uid;
+
+                    // অ্যাকাউন্ট খোলার সাথে সাথেই ২০ টাকা বোনাস ডেটাবেজে সাবমিট হবে
+                    await db.collection("users").doc(userId).set({
+                        realBalance: 20,
+                        balance: 20,
+                        isBonusTaken: true,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+
+                    Swal.fire({ title: 'অভিনন্দন!', text: 'অ্যাকাউন্ট তৈরি সফল এবং ২০ টাকা বোনাস যোগ হয়েছে।', icon: 'success', timer: 1500, showConfirmButton: false });
+                }
+                document.getElementById('auth-email').value = "";
+                document.getElementById('auth-password').value = "";
+                document.getElementById('auth-confirm-password').value = "";
+            } catch (error) {
+                let errorMsg = "একটি সমস্যা হয়েছে। আবার চেষ্টা করুন।";
+                if(error.code === "auth/user-not-found") errorMsg = "এই ইমেইল দিয়ে কোনো অ্যাকাউন্ট পাওয়া যায়নি।";
+                if(error.code === "auth/wrong-password") errorMsg = "ভুল পাসওয়ার্ড দিয়েছেন!";
+                if(error.code === "auth/email-already-in-use") errorMsg = "এই ইমেইলটি অলরেডি আরেকটি অ্যাকাউন্টে ব্যবহৃত হচ্ছে।";
+                if(error.code === "auth/invalid-email") errorMsg = "ইমেইল অ্যাড্রেসটির ফরম্যাট সঠিক নয়।";
+                
+                Swal.fire('ব্যর্থ!', errorMsg, 'error');
+            }
+        }
+
+        function logoutGame() {
+            Swal.fire({
+                title: 'লগ আউট করতে চান?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonColor: '#EF4444',
+                confirmButtonText: 'হ্যাঁ, লগআউট',
+                cancelButtonText: 'না',
+                background: '#111827',
+                color: '#fff'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    auth.signOut();
+                }
+            });
+        }
+
+        // --- GAME CORE LOGIC ---
+        async function loadUserData() {
+            const doc = await db.collection("users").doc(currentUser.uid).get();
+            if (doc.exists) {
+                const data = doc.data();
+                realBalance = data.realBalance || 0;
+                isBonusTaken = data.isBonusTaken || false;
+            } else {
+                await db.collection("users").doc(currentUser.uid).set({ realBalance: 20, isBonusTaken: true });
+                realBalance = 20;
+                isBonusTaken = true;
+            }
+            listenToTransactions(); 
+            updateUI();
+        }
+
+        function listenToTransactions() {
+            db.collection("transactions")
+                .where("userId", "==", currentUser.uid)
+                .onSnapshot((snapshot) => {
+                    snapshot.docChanges().forEach((change) => {
+                        const data = change.doc.data();
+                        if (change.type === "modified") {
+                            if (data.status === "Approved" && !data.isProcessed) {
+                                realBalance += data.finalAmount;
+                                db.collection("users").doc(currentUser.uid).update({ realBalance: realBalance });
+                                db.collection("transactions").doc(change.doc.id).update({ isProcessed: true });
+                                Swal.fire('সফল!', `আপনার ৳${data.finalAmount} ব্যালেন্স এপ্রুভ হয়েছে।`, 'success');
+                                updateUI();
+                            }
+                        }
+                    });
+                    transactions = snapshot.docs.map(doc => doc.data()).sort((a,b) => new Date(b.date) - new Date(a.date));
+                });
+        }
+
+        function listenToAdmin() {
+            db.collection("settings").doc("control").onSnapshot((doc) => { 
+                if (doc.exists) { resultControl = doc.data().status; } 
+            });
+            db.collection("settings").doc("numbers").onSnapshot((doc) => {
+                if (doc.exists) { adminNumbers = doc.data(); }
+            });
+        }
+
+        async function saveToFirebase() {
+            if (currentUser) { 
+                await db.collection("users").doc(currentUser.uid).update({ realBalance: realBalance }); 
+            }
+        }
+
+        function updateUI() { 
+            const displayBal = isDemoAccount ? demoBalance : realBalance;
+            document.getElementById('balance-txt').innerText = '৳' + displayBal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2}); 
+            document.getElementById('wallet-bal').innerText = '৳' + realBalance.toFixed(2); 
+            const label = document.getElementById('account-type-label');
+            label.innerText = isDemoAccount ? "Demo Account" : "Real Account";
+            label.className = isDemoAccount ? "text-[9px] bg-yellow-500/20 text-yellow-400 px-2 rounded-full font-bold uppercase tracking-widest mb-1" : "text-[9px] bg-green-500/20 text-green-400 px-2 rounded-full font-bold uppercase tracking-widest mb-1";
+        }
+
+        function validateInput(el) {
+            if (isFlying) return; 
+            let val = parseInt(el.value);
+            stake = (isNaN(val) || val < 1) ? 1 : val;
+        }
+
+        function changeAmt(v) { 
+            if (isFlying) return; 
+            if (stake + v >= 1) { 
+                stake += v; 
+                document.getElementById('stake-input').value = stake; 
+            }
+        }
+
+        function toggleInputs(lock) {
+            const input = document.getElementById('stake-input');
+            const minus = document.getElementById('minus-btn');
+            const plus = document.getElementById('plus-btn');
+            const upBtn = document.getElementById('btn-up');
+            const downBtn = document.getElementById('btn-down');
+            const timeSelect = document.getElementById('trade-time');
+
+            if (lock) {
+                input.readOnly = true;
+                input.classList.add('locked-input');
+                minus.classList.add('locked-input');
+                plus.classList.add('locked-input');
+                upBtn.classList.add('locked-input');
+                downBtn.classList.add('locked-input');
+                timeSelect.disabled = true;
+            } else {
+                input.readOnly = false;
+                input.classList.remove('locked-input');
+                minus.classList.remove('locked-input');
+                plus.classList.remove('locked-input');
+                upBtn.classList.remove('locked-input');
+                downBtn.classList.remove('locked-input');
+                timeSelect.disabled = false;
+            }
+        }
+
+        function startRocket(direction) {
+            if (isFlying) return;
+            const currentBal = isDemoAccount ? demoBalance : realBalance;
+            stake = parseInt(document.getElementById('stake-input').value) || 0;
+            if (stake < 1) return Swal.fire('ভুল', 'সর্বনিম্ন ১ টাকা ট্রেড করতে হবে!', 'warning');
+            if (stake > currentBal) return Swal.fire('ব্যর্থ', 'পর্যাপ্ত ব্যালেন্স নেই!', 'error');
+            
+            isFlying = true; 
+            toggleInputs(true); 
+            
+            const fixedTime = parseInt(document.getElementById('trade-time').value);
+            if(isDemoAccount) demoBalance -= stake; else realBalance -= stake; 
+            updateUI();
+            
+            const entryPrice = lastBtcPrice;
+            const entryLine = document.getElementById('entry-line');
+            const rocketElem = document.getElementById('rocket');
+            entryLine.style.bottom = window.getComputedStyle(rocketElem).bottom;
+            entryLine.style.display = 'block';
+            document.getElementById('countdown-layer').classList.remove('hidden');
+            let timeLeft = fixedTime;
+            document.getElementById('timer').innerText = timeLeft;
+
+            const timerInterval = setInterval(() => {
+                timeLeft--; 
+                document.getElementById('timer').innerText = timeLeft < 10 ? '0' + timeLeft : timeLeft;
+                if (timeLeft <= 0) clearInterval(timerInterval);
+            }, 1000);
+
+            setTimeout(async () => {
+                document.getElementById('countdown-layer').classList.add('hidden');
+                entryLine.style.display = 'none'; 
+                isFlying = false;
+                toggleInputs(false); 
+
+                let win = false;
+                const naturalOutcome = (direction === 'UP' && lastBtcPrice > entryPrice) || (direction === 'DOWN' && lastBtcPrice < entryPrice);
+
+                if (isDemoAccount) { win = naturalOutcome; } 
+                else {
+                    if (resultControl === "win") win = true;
+                    else if (resultControl === "loss") win = false;
+                    else win = naturalOutcome;
+                }
+                
+                let profitOnly = 0;
+                if (win) {
+                    profitOnly = stake * 0.95; 
+                    const finalWinAmount = stake + profitOnly;
+                    if(isDemoAccount) demoBalance += finalWinAmount; 
+                    else realBalance += finalWinAmount;
+                }
+                
+                let hx = localStorage.getItem('trade_hx') ? JSON.parse(localStorage.getItem('trade_hx')) : [];
+                hx.unshift({ type: direction, amount: stake, result: win ? 'Win' : 'Loss', profit: win ? profitOnly.toFixed(2) : `-${stake}`, mode: isDemoAccount ? 'Demo' : 'Real', date: new Date().toLocaleTimeString(), entry: entryPrice, exit: lastBtcPrice });
+                localStorage.setItem('trade_hx', JSON.stringify(hx));
+                
+                if(!isDemoAccount) await saveToFirebase();
+
+                Swal.fire({ title: win ? '🎉 জিতেছেন!' : '😢 হেরেছেন', html: win ? `নিট লাভ: ৳${profitOnly.toFixed(2)}` : `ক্ষতি: ৳${stake}`, icon: win ? 'success' : 'error', background: '#111827', color: '#fff' });
+                updateUI();
+            }, fixedTime * 1000);
+        }
+
+        const canvas = document.getElementById('chartCanvas');
+        const ctx = canvas.getContext('2d');
+        let pathPoints = [];
+        function initCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; }
+        window.addEventListener('resize', initCanvas);
+        window.onload = initCanvas;
+
+        function updateChart(newY) {
+            const xBase = canvas.width / 2;
+            const yPos = canvas.height - (newY * canvas.height / 100);
+            pathPoints.push({ x: xBase, y: yPos, price: lastBtcPrice });
+            if (pathPoints.length > 60) pathPoints.shift();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            if (pathPoints.length < 2) return;
+            ctx.beginPath(); ctx.lineWidth = 3;
+            for (let i = 0; i < pathPoints.length; i++) {
+                let p = pathPoints[i]; let xPos = xBase - ((pathPoints.length - 1 - i) * 8);
+                if (i > 0) ctx.strokeStyle = pathPoints[i].price >= pathPoints[i-1].price ? '#22C55E' : '#EF4444';
+                if (i === 0) ctx.moveTo(xPos, p.y); else ctx.lineTo(xPos, p.y);
+                ctx.stroke(); ctx.beginPath(); ctx.moveTo(xPos, p.y);
+            }
+        }
+
+        const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            const price = parseFloat(data.c);
+            const rocket = document.getElementById('rocket');
+            if (lastBtcPrice !== 0) {
+                let targetPos = 45;
+                if (price > lastBtcPrice) targetPos = 70; else if (price < lastBtcPrice) targetPos = 20;
+                rocket.style.bottom = targetPos + "%"; 
+                updateChart(targetPos);
+            }
+            document.getElementById('live-price').innerText = "৳" + (price * 118).toLocaleString(undefined, {maximumFractionDigits:0});
+            document.getElementById('live-price').style.color = (price >= lastBtcPrice) ? "#22C55E" : "#EF4444";
+            lastBtcPrice = price;
+        };
+
+        // Navigation Handler
+        function nav(id, btn) { document.querySelectorAll('.page').forEach(p => p.classList.remove('active-page')); document.getElementById(id).classList.add('active-page'); document.querySelectorAll('.nav-btn').forEach(b => b.classList.replace('text-indigo-500', 'text-gray-500')); btn.classList.replace('text-gray-500', 'text-indigo-500'); if(id === 'page-trade') setTimeout(initCanvas, 100); }
+
+        function showWalletModal(type) {
+            if (type === 'deposit') {
+                Swal.fire({
+                    title: 'ডিপোজিট', background: '#111827', color: '#fff',
+                    html: `<div class="text-left space-y-3 pt-2">
+                        <select id="sw-method" onchange="updateSelectedNumber(this.value)" class="bg-gray-800 p-3 rounded-xl w-full border border-white/10 text-white"><option value="bKash">bKash</option><option value="Nagad">Nagad</option><option value="Rocket">Rocket</option></select>
+                        <div class="bg-indigo-600/10 p-3 rounded-xl text-center border border-indigo-500/20"><p id="display-admin-num" class="text-lg font-bold text-yellow-400">${adminNumbers.bKash}</p></div>
+                        <input id="sw-amt" type="number" placeholder="টাকার পরিমাণ (Min 300)" class="bg-gray-800 p-3 rounded-xl w-full border border-white/10 text-white">
+                        <input id="sw-trx" type="text" placeholder="Transaction ID" class="bg-gray-800 p-3 rounded-xl w-full border border-white/10 uppercase text-white">
+                    </div>`,
+                    confirmButtonText: 'Submit Request',
+                    didOpen: () => {
+                        window.updateSelectedNumber = (val) => {
+                            document.getElementById('display-admin-num').innerText = adminNumbers[val] || "Not Available";
+                        };
+                    }
+                }).then(async (r) => {
+                    if(r.isConfirmed) {
+                        const amt = parseFloat(document.getElementById('sw-amt').value);
+                        const trx = document.getElementById('sw-trx').value;
+                        const method = document.getElementById('sw-method').value;
+
+                        if(amt >= 300 && trx) {
+                            let bonus = amt * 0.10;
+                            await db.collection("transactions").add({
+                                userId: currentUser.uid,
+                                type: 'Deposit',
+                                amount: amt,
+                                finalAmount: amt + bonus,
+                                method: method,
+                                status: 'Pending',
+                                note: `Trx: ${trx}`,
+                                isProcessed: false,
+                                date: new Date().toLocaleString()
+                            });
+                            Swal.fire('সফল', 'রিকোয়েস্ট পেন্ডিং আছে। অ্যাডমিন চেক করে এপ্রুভ করবে।', 'success');
+                        } else {
+                            Swal.fire('ভুল', 'সঠিক তথ্য দিন! মিনিমাম ৩০০ টাকা ডিপোজিট করতে হবে।', 'error');
+                        }
+                    }
+                });
+            } else {
+                Swal.fire({
+                    title: 'উইথড্র', background: '#111827', color: '#fff',
+                    html: `<input id="sw-phone" type="number" placeholder="নাম্বার" class="bg-gray-800 p-3 rounded-xl w-full mb-3 text-white"><input id="sw-amt-w" type="number" placeholder="পরিমাণ (মিনিমাম ১০০)" class="bg-gray-800 p-3 rounded-xl w-full text-white">`,
+                    confirmButtonText: 'Withdraw'
+                }).then(async (r) => {
+                    if(r.isConfirmed) {
+                        const amt = parseFloat(document.getElementById('sw-amt-w').value);
+                        const phone = document.getElementById('sw-phone').value;
+                        if(!isNaN(amt) && amt >= 100 && amt <= realBalance) {
+                            realBalance -= amt; 
+                            await saveToFirebase();
+                            await db.collection("transactions").add({
+                                userId: currentUser.uid,
+                                type: 'Withdraw',
+                                amount: amt,
+                                status: 'Pending',
+                                note: `Phone: ${phone}`,
+                                date: new Date().toLocaleString()
+                            });
+                            updateUI();
+                            Swal.fire('সফল', 'উইথড্র রিকোয়েস্ট পেন্ডিং আছে।', 'success');
+                        } else { 
+                            Swal.fire('ব্যর্থ', 'ভুল পরিমাণ বা পর্যাপ্ত ব্যালেন্স নেই', 'error'); 
+                        }
+                    }
+                });
+            }
+        }
+
+        function showHistory(f) {
+            let filtered = transactions.filter(t => t.type === f);
+            let html = '<div class="space-y-3 max-h-80 overflow-y-auto mt-4">';
+            if(filtered.length===0) html+='<p class="text-gray-500 text-center py-10">কোনো হিস্টোরি পাওয়া যায়নি।</p>';
+            else filtered.forEach(t => { 
+                html += `<div class="bg-white/5 p-4 rounded-2xl border border-white/10 text-left">
+                    <div class="flex justify-between items-center"><span class="font-bold">৳${t.amount}</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full ${t.status==='Pending'?'bg-yellow-500/20 text-yellow-500':'bg-green-500/20 text-green-500'} font-bold">${t.status}</span></div>
+                    <div class="flex justify-between text-[9px] text-gray-500 mt-1"><span>${t.note}</span><span>${t.date}</span></div></div>`; 
+            });
+            Swal.fire({ title: f+' History', html: html+'</div>', background: '#0B0E14', color: '#fff', showConfirmButton: false });
+        }
+
+        function showTradeHistory() {
+            let history = localStorage.getItem('trade_hx') ? JSON.parse(localStorage.getItem('trade_hx')) : [];
+            let html = '<div class="space-y-3 max-h-80 overflow-y-auto mt-4">';
+            if(history.length===0) html+='<p class="text-gray-500 text-center py-10">এখনো কোনো ট্রেড করা হয়নি।</p>';
+            else history.forEach(t => { 
+                html += `<div class="bg-white/5 p-4 rounded-2xl border border-white/10 flex justify-between items-center text-xs">
+                    <div class="text-left">
+                        <p class="font-bold text-indigo-400">${t.type} Trade (${t.mode})</p>
+                        <p class="text-[9px] text-gray-400">Entry: ${t.entry.toFixed(2)} | Exit: ${t.exit.toFixed(2)}</p>
+                        <p class="text-[9px] text-gray-500">${t.date}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold ${t.result==='Win'?'text-green-500':'text-red-500'}">${t.result}</p>
+                        <p class="text-[9px] font-bold">৳${t.profit}</p>
+                    </div>
+                </div>`; 
+            });
+            Swal.fire({ title: 'Detailed Trade History', html: html+'</div>', background: '#0B0E14', color: '#fff', showConfirmButton: false });
+        }
+
+        function refreshLeaderboard() {
+            const names = ["Sajid", "Ariful", "Mim", "Rifat", "Hasan", "Sumaiya", "Rakib", "Kabir"];
+            let leaderboardData = names.map(name => ({ name, profit: Math.floor(Math.random() * 15000 + 1000) })).sort((a, b) => b.profit - a.profit);
+            document.getElementById('podium-area').innerHTML = `<div class="flex flex-col items-center"><div class="w-14 h-14 rounded-full border-2 border-gray-400 flex items-center justify-center bg-gray-800 text-xl">🥈</div><p class="text-[10px] font-bold mt-2">${leaderboardData[1].name}</p><p class="text-[10px] text-indigo-400">৳${leaderboardData[1].profit}</p></div><div class="flex flex-col items-center"><div class="w-20 h-20 rounded-full border-4 border-yellow-500 flex items-center justify-center bg-indigo-900 text-3xl relative"><span>🥇</span><span class="absolute -top-4 text-2xl">👑</span></div><p class="text-sm font-bold mt-2 text-yellow-400">${leaderboardData[0].name}</p><p class="text-xs text-yellow-400 font-bold">৳${leaderboardData[0].profit}</p></div><div class="flex flex-col items-center"><div class="w-14 h-14 rounded-full border-2 border-orange-600 flex items-center justify-center bg-gray-800 text-xl">🥉</div><p class="text-[10px] font-bold mt-2">${leaderboardData[2].name}</p><p class="text-[10px] text-indigo-400">৳${leaderboardData[2].profit}</p></div>`;
+            document.getElementById('leader-list').innerHTML = leaderboardData.slice(3).map((u, i) => `<div class="card p-4 flex justify-between items-center bg-white/5 border-white/5"><div class="flex items-center gap-3"><span class="text-xs text-gray-500 font-bold w-4">${i+4}</span><div class="w-8 h-8 bg-indigo-500/20 rounded-full flex items-center justify-center text-xs font-bold text-indigo-300">${u.name[0]}</div><span class="text-sm font-semibold">${u.name}</span></div><span class="text-green-400 font-bold text-sm">৳${u.profit.toLocaleString()}</span></div>`).join('');
+        }
+
+        function contactSupport() { window.open('https://t.me/NexTradeRocket', '_blank'); }
+        async function copyRef() { const c = document.getElementById("ref-input"); try { await navigator.clipboard.writeText(c.value); Swal.fire({ title: 'Copied!', text: 'Refer code copied', icon: 'success', toast: true, position: 'top', timer: 2000, showConfirmButton: false }); } catch (err) { c.select(); document.execCommand("copy"); } }
+        
+        function toggleBalanceType() {
+            isDemoAccount = !isDemoAccount; updateUI();
+            Swal.fire({ title: isDemoAccount ? "Demo Account" : "Real Account", text: "সুইচ করা হয়েছে", icon: 'info', toast: true, position: 'top', timer: 2000, showConfirmButton: false, background: '#111827', color: '#fff' });
+        }
+    </script>
+</body>
+</html>
